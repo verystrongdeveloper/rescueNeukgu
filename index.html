@@ -53,9 +53,43 @@
           <option value="5">🐺 5마리</option>
         </select>
         <button id="muteBtn" class="btn icon-btn" title="효과음 on/off">🔊</button>
+        <button id="rankBtn" class="btn" title="랭킹 보기">🏆 랭킹</button>
+        <button id="userBtn" class="btn" title="사용자명 변경">
+          <span aria-hidden="true">👤</span>
+          <span id="userBtnName">이름 설정</span>
+        </button>
         <button id="resetBtn" class="btn primary">🔁 새 게임</button>
       </div>
     </header>
+
+    <div id="rankModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rankModalTitle">
+      <div class="modal-backdrop" data-close></div>
+      <div class="modal-panel">
+        <div class="modal-head">
+          <h2 id="rankModalTitle" class="modal-title">🏆 구조자 랭킹</h2>
+          <button class="btn icon-btn" data-close title="닫기">✖️</button>
+        </div>
+        <div id="rankList" class="rank-list">불러오는 중…</div>
+        <div class="modal-foot">
+          <button id="rankRefreshBtn" class="btn">🔄 새로고침</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="userModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+      <div class="modal-backdrop" data-close></div>
+      <div class="modal-panel">
+        <div class="modal-head">
+          <h2 id="userModalTitle" class="modal-title">👤 사용자명 입력</h2>
+          <button class="btn icon-btn" data-close title="닫기">✖️</button>
+        </div>
+        <p class="modal-desc">랭킹에 기록될 이름을 입력하세요 (최대 20자).</p>
+        <input id="userInput" class="text-input" type="text" maxlength="20" placeholder="예: 늑구지킴이" />
+        <div class="modal-foot">
+          <button id="userSaveBtn" class="btn primary">저장</button>
+        </div>
+      </div>
+    </div>
 
     <main class="board-wrap">
       <div id="board" class="board" oncontextmenu="return false;"></div>

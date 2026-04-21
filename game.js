@@ -27,6 +27,16 @@
   const overlayMsg = document.getElementById('overlayMsg');
   const overlayBtn = document.getElementById('overlayBtn');
 
+  const rankBtn = document.getElementById('rankBtn');
+  const userBtn = document.getElementById('userBtn');
+  const userBtnName = document.getElementById('userBtnName');
+  const rankModal = document.getElementById('rankModal');
+  const rankListEl = document.getElementById('rankList');
+  const rankRefreshBtn = document.getElementById('rankRefreshBtn');
+  const userModal = document.getElementById('userModal');
+  const userInput = document.getElementById('userInput');
+  const userSaveBtn = document.getElementById('userSaveBtn');
+
   // ============== 사운드 (Web Audio API로 생성, 외부 파일 없음) ==============
   const Sound = (() => {
     let ctx = null;
@@ -731,6 +741,8 @@
       : `${state.humanEmoji} 가 ${state.wolfEmoji} 를 무사히 구출했어요! (${state.seconds}초)`;
 
     setTimeout(() => showOverlay({ icon: '💖', title, msg }), 900);
+
+    Ranking.submit(N);
   }
 
   // ============== 패배 ==============
@@ -850,6 +862,161 @@
     muteBtn.textContent = muted ? '🔈' : '🔊';
     muteBtn.title = muted ? '효과음 켜기' : '효과음 끄기';
   });
+
+  // ============== 랭킹 (Google Apps Script 웹앱) ==============
+  // backend/README.md 참고해서 배포한 뒤, 아래 URL을 채워주세요.
+  const RANKING_API_URL = 'https://script.google.com/macros/s/AKfycbwl7KIfwVT2rd0_F76-LHYxAhV10dejPnx8Wqn9yuMSkjrF_FW5APx48qMGc5KHvAhXZQ/exec';
+
+  const USER_KEY = 'rescueNeukgu.username';
+
+  const Ranking = (() => {
+    const enabled = () => /^https?:\/\//.test(RANKING_API_URL);
+
+    async function submit(rescuedCount) {
+      const username = getUsername();
+      if (!enabled() || !username || !rescuedCount) return;
+      try {
+        // Content-Type을 text/plain으로 보내 CORS preflight 회피 (GAS 웹앱 관행)
+        const res = await fetch(RANKING_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ username, rescuedCount }),
+          redirect: 'follow',
+        });
+        const text = await res.text();
+        console.log('[rank] submit response:', res.status, text);
+      } catch (e) {
+        console.warn('[rank] submit failed:', e);
+      }
+    }
+
+    async function fetchRank(limit = 20) {
+      if (!enabled()) return { ok: false, error: 'disabled' };
+      try {
+        const url = `${RANKING_API_URL}?action=rank&limit=${limit}`;
+        const res = await fetch(url, { redirect: 'follow' });
+        const text = await res.text();
+        console.log('[rank] fetch status:', res.status, 'body preview:', text.slice(0, 200));
+        try {
+          return JSON.parse(text);
+        } catch (parseErr) {
+          return { ok: false, error: `응답이 JSON이 아님 (status ${res.status}). 본문 앞부분: ${text.slice(0, 120)}` };
+        }
+      } catch (e) {
+        console.warn('[rank] fetch failed:', e);
+        return { ok: false, error: String(e && e.message || e) };
+      }
+    }
+
+    return { submit, fetchRank, enabled };
+  })();
+
+  // ============== 사용자명 관리 ==============
+  function getUsername() {
+    try { return (localStorage.getItem(USER_KEY) || '').trim(); } catch { return ''; }
+  }
+  function setUsername(name) {
+    const clean = String(name || '').trim().slice(0, 20);
+    try { localStorage.setItem(USER_KEY, clean); } catch {}
+    refreshUserBtn();
+    return clean;
+  }
+  function refreshUserBtn() {
+    const name = getUsername();
+    userBtnName.textContent = name || '이름 설정';
+  }
+
+  function openUserModal() {
+    userInput.value = getUsername();
+    userModal.classList.remove('hidden');
+    setTimeout(() => userInput.focus(), 0);
+  }
+  function closeUserModal() { userModal.classList.add('hidden'); }
+
+  function saveUserFromInput() {
+    const name = setUsername(userInput.value);
+    if (!name) { userInput.focus(); return; }
+    closeUserModal();
+  }
+
+  // ============== 랭킹 모달 ==============
+  async function openRankModal() {
+    rankModal.classList.remove('hidden');
+    await renderRank();
+  }
+  function closeRankModal() { rankModal.classList.add('hidden'); }
+
+  async function renderRank() {
+    if (!Ranking.enabled()) {
+      rankListEl.className = 'rank-list is-empty';
+      rankListEl.textContent = '랭킹 서버가 아직 연결되지 않았어요. backend/README.md를 참고해 URL을 설정해주세요.';
+      return;
+    }
+    rankListEl.className = 'rank-list is-empty';
+    rankListEl.textContent = '불러오는 중…';
+    const res = await Ranking.fetchRank(20);
+    if (!res || !res.ok) {
+      rankListEl.className = 'rank-list is-empty';
+      rankListEl.textContent = '랭킹을 불러오지 못했어요. ' + (res && res.error ? `(${res.error})` : '');
+      return;
+    }
+    const list = res.rank || [];
+    if (list.length === 0) {
+      rankListEl.className = 'rank-list is-empty';
+      rankListEl.textContent = '아직 기록이 없어요. 첫 구조자가 되어보세요! 🐺';
+      return;
+    }
+    const me = getUsername();
+    const medal = (i) => i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+    rankListEl.className = 'rank-list';
+    rankListEl.innerHTML = list.map((r, i) => {
+      const isMe = me && r.username === me;
+      const badgeCls = i === 0 ? 'rank-badge top1' : 'rank-badge';
+      return (
+        `<div class="rank-row${isMe ? ' me' : ''}">`
+        + `<div class="${badgeCls}">${medal(i)}</div>`
+        + `<div class="rank-name">${escapeHtml(r.username)}</div>`
+        + `<div class="rank-score">${r.totalRescued}<span class="unit">마리</span></div>`
+        + `</div>`
+      );
+    }).join('');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  // ============== 이벤트 바인딩: 랭킹/사용자 ==============
+  userBtn.addEventListener('click', openUserModal);
+  userSaveBtn.addEventListener('click', saveUserFromInput);
+  userInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') saveUserFromInput();
+    if (e.key === 'Escape') closeUserModal();
+  });
+
+  rankBtn.addEventListener('click', openRankModal);
+  rankRefreshBtn.addEventListener('click', renderRank);
+
+  // 모달 백드롭 / 닫기 버튼
+  [rankModal, userModal].forEach(m => {
+    m.addEventListener('click', (e) => {
+      if (e.target.hasAttribute('data-close')) m.classList.add('hidden');
+    });
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!rankModal.classList.contains('hidden')) closeRankModal();
+    if (!userModal.classList.contains('hidden')) closeUserModal();
+  });
+
+  refreshUserBtn();
+
+  // 첫 방문자에게 이름 입력 유도
+  if (!getUsername()) {
+    setTimeout(openUserModal, 400);
+  }
 
   // 첫 시작
   newGame();

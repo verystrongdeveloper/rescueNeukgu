@@ -453,12 +453,16 @@ html, body {
       transparent 2px 7px);
   pointer-events: none;
 }
-.cell:hover:not(.open):not(.mine-boom) {
-  filter: brightness(1.12) saturate(1.05);
-  box-shadow:
-    inset -1px -1px 0 rgba(0, 0, 0, 0.35),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.22),
-    inset 0 0 0 2px rgba(255, 244, 180, 0.4);
+/* 호버 효과는 실제 포인팅 디바이스(마우스)에서만 적용.
+   터치 기기에서는 탭 후 :hover 잔존으로 인한 "활성화된 것처럼 보이는" 효과 방지 */
+@media (hover: hover) {
+  .cell:hover:not(.open):not(.mine-boom) {
+    filter: brightness(1.12) saturate(1.05);
+    box-shadow:
+      inset -1px -1px 0 rgba(0, 0, 0, 0.35),
+      inset 1px 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 0 0 2px rgba(255, 244, 180, 0.4);
+  }
 }
 .cell:active:not(.open) { transform: translateY(1px); }
 
@@ -805,6 +809,16 @@ html, body {
 @media (max-width: 640px) {
   .mobile-only { display: inline-flex !important; }
 
+  /* 페이지 전체 스크롤 완전 차단 (당겨서 새로고침/고무줄 효과 포함) */
+  html, body {
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+  body { position: fixed; inset: 0; width: 100%; }
+
   /* 햄버거 메뉴: 모바일에서는 기본 숨김, .open 상태일 때만 패널로 표시 */
   .controls-menu {
     display: none;
@@ -818,6 +832,9 @@ html, body {
     padding: 10px;
     min-width: 200px;
     max-width: calc(100vw - 12px);
+    max-height: calc(100dvh - 90px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background:
       repeating-linear-gradient(90deg, rgba(255, 200, 130, 0.06) 0 3px, transparent 3px 7px),
       linear-gradient(180deg, #5b3d1f, #3a2511);
@@ -838,7 +855,10 @@ html, body {
 
   .app {
     padding: 10px 6px 16px;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
   }
   .header { gap: 8px; margin-bottom: 8px; }
   .title { font-size: 22px; gap: 8px; }

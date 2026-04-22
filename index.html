@@ -40,25 +40,35 @@
             <span id="timer" class="stat-value">0</span>
           </div>
         </div>
-        <select id="difficulty" class="select" title="난이도">
-          <option value="easy">쉬움 · 10×10 · 지뢰 12</option>
-          <option value="normal" selected>보통 · 16×16 · 지뢰 40</option>
-          <option value="hard">어려움 · 20×20 · 지뢰 75</option>
-        </select>
-        <select id="wolves" class="select" title="늑구 마리 수">
-          <option value="1" selected>🐺 1마리</option>
-          <option value="2">🐺 2마리</option>
-          <option value="3">🐺 3마리</option>
-          <option value="4">🐺 4마리</option>
-          <option value="5">🐺 5마리</option>
-        </select>
-        <button id="muteBtn" class="btn icon-btn" title="효과음 on/off">🔊</button>
-        <button id="rankBtn" class="btn" title="랭킹 보기">🏆 랭킹</button>
-        <button id="userBtn" class="btn" title="사용자명 변경">
-          <span aria-hidden="true">👤</span>
-          <span id="userBtnName">이름 설정</span>
-        </button>
-        <button id="resetBtn" class="btn primary">🔁 새 게임</button>
+        <button id="modeBtn" class="btn icon-btn mobile-only" title="탭 모드 전환 (열기 / 깃발)">👆</button>
+        <button id="menuBtn" class="btn icon-btn mobile-only" title="메뉴 열기" aria-expanded="false" aria-controls="controlsMenu">☰</button>
+
+        <div id="controlsMenu" class="controls-menu">
+          <select id="difficulty" class="select" title="난이도 (지뢰 밀도)">
+            <option value="easy">쉬움 · 지뢰 12%</option>
+            <option value="normal" selected>보통 · 지뢰 16%</option>
+            <option value="hard">어려움 · 지뢰 20%</option>
+          </select>
+          <label class="tile-slider" title="타일 크기 조절">
+            <span class="tile-slider-icon" aria-hidden="true">🔳</span>
+            <input id="tileSize" class="tile-slider-range" type="range" min="14" max="60" step="2" value="34" />
+            <span id="tileSizeVal" class="tile-slider-val">34px</span>
+          </label>
+          <select id="wolves" class="select" title="늑구 마리 수">
+            <option value="1" selected>🐺 1마리</option>
+            <option value="2">🐺 2마리</option>
+            <option value="3">🐺 3마리</option>
+            <option value="4">🐺 4마리</option>
+            <option value="5">🐺 5마리</option>
+          </select>
+          <button id="muteBtn" class="btn icon-btn" title="효과음 on/off">🔊</button>
+          <button id="rankBtn" class="btn" title="랭킹 보기">🏆 랭킹</button>
+          <button id="userBtn" class="btn" title="사용자명 변경">
+            <span aria-hidden="true">👤</span>
+            <span id="userBtnName">이름 설정</span>
+          </button>
+          <button id="resetBtn" class="btn primary">🔁 새 게임</button>
+        </div>
       </div>
     </header>
 

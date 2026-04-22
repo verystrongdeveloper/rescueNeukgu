@@ -268,9 +268,100 @@ html, body {
 .btn.big { padding: 13px 22px; font-size: 16px; }
 .icon-btn {
   width: 42px;
-  padding: 10px 0;
-  text-align: center;
+  height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   font-size: 18px;
+}
+
+/* 모바일 전용 표시 유틸 */
+.mobile-only { display: none !important; }
+
+/* 햄버거 메뉴 컨테이너: 데스크톱에서는 기존처럼 인라인 flex로 펼쳐진다 */
+.controls-menu {
+  display: contents;
+}
+
+/* 깃발 모드가 켜졌을 때 모드 버튼 강조 */
+#modeBtn.flag-on {
+  background: linear-gradient(180deg, #e8a23a, #a85f17);
+  border-color: #f4c24a;
+  color: #fff6e1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.2),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    0 0 0 2px rgba(244, 194, 74, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* 타일 크기 슬라이더 (나무 패널 테마) */
+.tile-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 200, 130, 0.06) 0 3px, transparent 3px 7px),
+    linear-gradient(180deg, var(--panel-a), var(--panel-b));
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 170, 0.14),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    0 4px 14px rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.tile-slider-icon { font-size: 16px; }
+.tile-slider-val {
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--accent-gold);
+}
+.tile-slider-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 6px;
+  background: linear-gradient(90deg, #8a6233 0%, #c98e1e 100%);
+  border-radius: 999px;
+  outline: none;
+  margin: 0;
+  cursor: pointer;
+}
+.tile-slider-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f4c24a, #a85f17);
+  border: 2px solid #3a2511;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+  transition: transform 0.08s ease;
+}
+.tile-slider-range::-webkit-slider-thumb:active { transform: scale(1.1); cursor: grabbing; }
+.tile-slider-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #f4c24a, #a85f17);
+  border: 2px solid #3a2511;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  cursor: grab;
+}
+.tile-slider-range::-moz-range-track {
+  height: 6px;
+  background: linear-gradient(90deg, #8a6233 0%, #c98e1e 100%);
+  border-radius: 999px;
 }
 
 /* 보드 래퍼 (통나무 프레임) */
@@ -279,9 +370,12 @@ html, body {
   padding: 14px;
   border-radius: 18px;
   border: 3px solid #3a2511;
-  width: 100%;
-  max-width: 680px;
+  /* 내부 격자 크기에 맞춰 축소 (좌우 남는 공간 제거) */
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
   background:
     repeating-linear-gradient(90deg,
       rgba(0, 0, 0, 0.14) 0 2px,
@@ -707,19 +801,105 @@ html, body {
 
 #userBtnName { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 모바일 대응 */
+/* 모바일 대응: 스크롤 없이 한 화면에 격자가 모두 보이도록 */
 @media (max-width: 640px) {
-  .title { font-size: 26px; }
-  .title-emoji { font-size: 34px; }
-  .sun { font-size: 40px; top: 16px; right: 16px; }
-  .cloud { font-size: 30px; }
-  .forest { font-size: 40px; height: 50px; bottom: 36px; }
-  .meadow { height: 40px; }
-  .stat { padding: 6px 10px; min-width: 90px; }
-  .stat-value { font-size: 16px; }
-  .btn, .select { padding: 8px 10px; font-size: 13px; }
-  .btn.big { padding: 11px 18px; font-size: 15px; }
-  .app { padding: 20px 10px 100px; }
-  .board-wrap { padding: 8px; }
-  .board-scroll { max-height: calc(100vh - 260px); }
+  .mobile-only { display: inline-flex !important; }
+
+  /* 햄버거 메뉴: 모바일에서는 기본 숨김, .open 상태일 때만 패널로 표시 */
+  .controls-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 6px;
+    z-index: 50;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px;
+    min-width: 200px;
+    max-width: calc(100vw - 12px);
+    background:
+      repeating-linear-gradient(90deg, rgba(255, 200, 130, 0.06) 0 3px, transparent 3px 7px),
+      linear-gradient(180deg, #5b3d1f, #3a2511);
+    border: 2px solid var(--panel-border-hi);
+    border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 220, 170, 0.2);
+    animation: menu-pop 0.18s ease-out;
+  }
+  .controls-menu.open { display: flex; }
+  .controls-menu > * { width: 100%; }
+  .controls-menu .tile-slider { justify-content: space-between; }
+  .controls-menu .tile-slider-range { flex: 1; width: auto; }
+  .controls-menu .icon-btn { width: 100%; }
+  @keyframes menu-pop {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .app {
+    padding: 10px 6px 16px;
+    min-height: 100vh;
+  }
+  .header { gap: 8px; margin-bottom: 8px; }
+  .title { font-size: 22px; gap: 8px; }
+  .title-emoji { font-size: 28px; }
+  .subtitle { font-size: 12px; margin-top: 2px; }
+
+  /* 컨트롤 바: 작고 빽빽하게 + 햄버거 드롭다운 기준점 */
+  .controls { gap: 6px; position: relative; }
+  .stat {
+    padding: 4px 8px;
+    min-width: 0;
+    gap: 6px;
+    border-radius: 8px;
+  }
+  .stat-icon { font-size: 16px; }
+  .stat-label { font-size: 10px; }
+  .stat-value { font-size: 14px; }
+  .btn, .select {
+    padding: 6px 8px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+  .btn.big { padding: 10px 16px; font-size: 14px; }
+  .icon-btn { width: 34px; height: 34px; padding: 0; font-size: 15px; }
+  #userBtnName { max-width: 90px; }
+
+  /* 타일 슬라이더: 모바일에서 작게 */
+  .tile-slider { padding: 4px 8px; gap: 6px; border-radius: 8px; }
+  .tile-slider-icon { font-size: 14px; }
+  .tile-slider-val { font-size: 11px; min-width: 34px; }
+  .tile-slider-range { width: 90px; height: 5px; }
+
+  /* 보드: 스크롤 제거, 화면 폭에 맞춰 셀 크기를 JS에서 계산 */
+  .board-wrap {
+    padding: 6px;
+    border-radius: 12px;
+    border-width: 2px;
+    max-width: 100%;
+  }
+  .board-scroll {
+    max-height: none;
+    overflow: visible;
+    touch-action: auto;
+  }
+
+  /* 하단 힌트: 간결하게 */
+  .hint {
+    margin-top: 8px;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  /* 장식 요소: 공간 절약 */
+  .sun { font-size: 32px; top: 10px; right: 12px; }
+  .cloud { display: none; }
+  .forest { display: none; }
+  .meadow { display: none; }
+}
+
+/* 아주 좁은 화면: 힌트/부제목 숨겨서 보드 공간 확보 */
+@media (max-width: 420px) {
+  .subtitle { display: none; }
+  .hint { display: none; }
 }

@@ -2,11 +2,19 @@
   'use strict';
 
   // ============== 난이도 / 캐릭터 ==============
-  const DIFFICULTIES = {
-    easy:   { rows: 10, cols: 10, mines: 12, cellSize: 44, minGap: 3, maxWolves: 3 },
-    normal: { rows: 16, cols: 16, mines: 40, cellSize: 36, minGap: 5, maxWolves: 4 },
-    hard:   { rows: 20, cols: 20, mines: 75, cellSize: 30, minGap: 7, maxWolves: 5 },
+  // 난이도 = 지뢰 밀도(전체 셀 대비 지뢰 비율)
+  const DENSITIES = {
+    easy:   0.12,
+    normal: 0.16,
+    hard:   0.20,
   };
+  // 타일 크기(px). 슬라이더에서 직접 받음. 안전 범위로 clamp.
+  const TILE_MIN = 14;
+  const TILE_MAX = 60;
+  const TILE_DEFAULT = 34;
+  // 지뢰판 최소/최대 크기 (rows/cols 각각)
+  const MIN_DIM = 6;
+  const MAX_DIM = 60;
 
   const RESCUERS = ['🧑\u200D🚒', '👨\u200D🚒', '👩\u200D🚒', '🧑', '🙋\u200D♀️', '🙋\u200D♂️'];
   const WOLF = '🐺';
@@ -18,9 +26,14 @@
   const mineCountEl = document.getElementById('mineCount');
   const timerEl = document.getElementById('timer');
   const difficultyEl = document.getElementById('difficulty');
+  const tileSizeEl = document.getElementById('tileSize');
+  const tileSizeValEl = document.getElementById('tileSizeVal');
   const wolvesEl = document.getElementById('wolves');
   const resetBtn = document.getElementById('resetBtn');
   const muteBtn = document.getElementById('muteBtn');
+  const modeBtn = document.getElementById('modeBtn');
+  const menuBtn = document.getElementById('menuBtn');
+  const controlsMenu = document.getElementById('controlsMenu');
   const overlayEl = document.getElementById('overlay');
   const overlayIcon = document.getElementById('overlayIcon');
   const overlayTitle = document.getElementById('overlayTitle');
@@ -137,10 +150,78 @@
   const rand = n => Math.floor(Math.random() * n);
   const choice = arr => arr[rand(arr.length)];
 
-  function createState(difficulty, wolfCount) {
-    const cfg = DIFFICULTIES[difficulty] || DIFFICULTIES.normal;
-    const { rows, cols, mines, cellSize } = cfg;
-    const numWolves = Math.max(1, Math.min(cfg.maxWolves, wolfCount | 0 || 1));
+  // 보드의 행/열을 현재 뷰포트와 타일 크기에 맞춰 계산한다.
+  // - 가로: 부모(.app)의 content 폭에서 래퍼 padding/border 를 뺀 값
+  // - 세로: 래퍼 top 위치에서 남은 뷰포트 높이
+  // - 데스크톱에서는 가로가 세로보다 길도록 비율을 제한 (9:16 같은 세로 보드 방지)
+  function computeBoardLayout(cellSize) {
+    const wrapEl = document.querySelector('.board-wrap');
+    let padH = 28, padV = 28, borderH = 6, borderV = 6;
+    let rectTop = 200;
+    if (wrapEl) {
+      const cs = getComputedStyle(wrapEl);
+      padH = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      borderH = (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+      borderV = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+      rectTop = wrapEl.getBoundingClientRect().top;
+    }
+    // 부모(.app)의 content 폭
+    let parentContentW = window.innerWidth - 40;
+    const parent = wrapEl ? wrapEl.parentElement : null;
+    if (parent) {
+      const pcs = getComputedStyle(parent);
+      const ppadH = (parseFloat(pcs.paddingLeft) || 0) + (parseFloat(pcs.paddingRight) || 0);
+      parentContentW = parent.clientWidth - ppadH;
+    }
+    const availW = Math.max(cellSize * MIN_DIM, parentContentW - padH - borderH);
+
+    const reservedBottom = 90;
+    const availH = Math.max(
+      cellSize * MIN_DIM,
+      window.innerHeight - rectTop - padV - borderV - reservedBottom
+    );
+
+    let cols = Math.max(MIN_DIM, Math.min(MAX_DIM, Math.floor(availW / cellSize)));
+    let rows = Math.max(MIN_DIM, Math.min(MAX_DIM, Math.floor(availH / cellSize)));
+
+    // 화면이 가로로 넓은 환경(=데스크톱/태블릿 가로)에서는 세로가 가로를 넘지 않도록 제한.
+    // 뷰포트 폭이 높이보다 크면 landscape 로 간주.
+    const isLandscapeViewport = window.innerWidth >= window.innerHeight;
+    if (isLandscapeViewport) {
+      const maxRowsByAspect = Math.max(MIN_DIM, Math.floor(cols * 0.7));
+      if (rows > maxRowsByAspect) rows = maxRowsByAspect;
+    }
+
+    return { rows, cols };
+  }
+
+  function maxWolvesFor(rows, cols) {
+    return Math.max(1, Math.min(5, Math.floor(Math.min(rows, cols) / 4)));
+  }
+
+  function minGapFor(rows, cols) {
+    // 시작점 간 최소 간격: 보드가 클수록 더 넓게
+    return Math.max(3, Math.floor(Math.min(rows, cols) * 0.3));
+  }
+
+  function clampTileSize(n) {
+    const v = parseInt(n, 10);
+    if (!Number.isFinite(v)) return TILE_DEFAULT;
+    return Math.max(TILE_MIN, Math.min(TILE_MAX, v));
+  }
+
+  function createState(difficulty, wolfCount, tileSize) {
+    const density = DENSITIES[difficulty] || DENSITIES.normal;
+    const cellSize = clampTileSize(tileSize);
+    const { rows, cols } = computeBoardLayout(cellSize);
+    const total = rows * cols;
+    // 지뢰 수: 밀도 * 전체 셀, 최소 3개, 최대 전체의 40% 이하로 제한
+    const mines = Math.max(3, Math.min(Math.floor(total * 0.4), Math.round(total * density)));
+    const minGap = minGapFor(rows, cols);
+    const maxWolves = maxWolvesFor(rows, cols);
+    const cfg = { rows, cols, mines, cellSize, minGap, maxWolves, density };
+    const numWolves = Math.max(1, Math.min(maxWolves, wolfCount | 0 || 1));
 
     // 유효한 보드가 나올 때까지 "시작점 재선정 + 재구성"을 반복한다.
     // (어떤 경우에도 초기부터 연결된 상태로 시작되지 않도록 외부 재시도 루프로 보증)
@@ -453,7 +534,7 @@
   }
 
   // ============== 렌더링 ==============
-  function render() {
+  function buildBoardDOM() {
     boardEl.innerHTML = '';
     boardEl.style.setProperty('--cell-size', state.cellSize + 'px');
     boardEl.style.gridTemplateColumns = `repeat(${state.cols}, var(--cell-size))`;
@@ -475,16 +556,34 @@
       state.cellEls.push(rowEls);
     }
 
+    // 현재 보드 상태(열린 셀/깃발)를 그대로 반영
+    for (let r = 0; r < state.rows; r++) {
+      for (let c = 0; c < state.cols; c++) {
+        renderCell(r, c);
+      }
+    }
+
     state.humanEl = makeActor(state.humanEmoji, 'human');
     boardEl.appendChild(state.humanEl);
     placeActor(state.humanEl, state.posHuman[0], state.posHuman[1]);
 
-    state.wolfEls = state.posWolves.map(([r, c]) => {
+    state.wolfEls = state.posWolves.map(([r, c], i) => {
       const el = makeActor(state.wolfEmoji, 'wolf');
       boardEl.appendChild(el);
-      placeActor(el, r, c);
+      // 이미 구조된 늑구는 사람 위치에 그대로 표시한다.
+      const rescued = state.rescued && state.rescued[i];
+      const [pr, pc] = rescued ? state.posHuman : [r, c];
+      placeActor(el, pr, pc);
+      if (rescued) {
+        el.classList.remove('bounce');
+        el.classList.add('meet');
+      }
       return el;
     });
+  }
+
+  function render() {
+    buildBoardDOM();
 
     floodOpen(state.posHuman[0], state.posHuman[1]);
     for (const [r, c] of state.posWolves) floodOpen(r, c);
@@ -492,6 +591,30 @@
     updateMineCount();
     updateTimer();
   }
+
+  // 창 크기가 크게 바뀌면(회전 등) 새 보드를 생성해 격자가 화면에 맞도록 한다.
+  let relayoutTimer = null;
+  let lastVW = window.innerWidth;
+  let lastVH = window.innerHeight;
+  function onViewportChange() {
+    if (!state) return;
+    const dw = Math.abs(window.innerWidth - lastVW);
+    const dh = Math.abs(window.innerHeight - lastVH);
+    // 작은 변화는 무시 (모바일 주소창 숨김/표시 등)
+    if (dw < 80 && dh < 120) return;
+    lastVW = window.innerWidth;
+    lastVH = window.innerHeight;
+    // 게임이 진행 중이 아니거나 아직 시작 전이면 자동 재생성
+    if (!state.timerStarted) newGame();
+  }
+  window.addEventListener('resize', () => {
+    if (relayoutTimer) clearTimeout(relayoutTimer);
+    relayoutTimer = setTimeout(onViewportChange, 200);
+  });
+  window.addEventListener('orientationchange', () => {
+    if (relayoutTimer) clearTimeout(relayoutTimer);
+    relayoutTimer = setTimeout(onViewportChange, 300);
+  });
 
   function makeActor(emoji, kind) {
     const d = document.createElement('div');
@@ -519,6 +642,19 @@
   }
 
   // ============== 입력 ==============
+  // 모바일에서 탭이 "열기"/"깃발" 중 어떤 동작인지 결정한다.
+  let flagMode = false;
+
+  function toggleFlag(r, c) {
+    const cell = state.board[r][c];
+    if (cell.open) return;
+    cell.flag = !cell.flag;
+    state.flags += cell.flag ? 1 : -1;
+    if (cell.flag) Sound.flag(); else Sound.unflag();
+    renderCell(r, c);
+    updateMineCount();
+  }
+
   function onLeftClick(e) {
     if (state.gameOver) return;
     Sound.warmup();
@@ -526,6 +662,12 @@
     const c = +e.currentTarget.dataset.c;
     const cell = state.board[r][c];
     startTimerIfNeeded();
+
+    // 깃발 모드: 닫힌 셀 탭은 깃발 토글로 동작 (열린 셀은 평소처럼 chord 가능)
+    if (flagMode && !cell.open) {
+      toggleFlag(r, c);
+      return;
+    }
 
     if (cell.flag) return;
 
@@ -545,15 +687,8 @@
     Sound.warmup();
     const r = +e.currentTarget.dataset.r;
     const c = +e.currentTarget.dataset.c;
-    const cell = state.board[r][c];
     startTimerIfNeeded();
-
-    if (cell.open) return;
-    cell.flag = !cell.flag;
-    state.flags += cell.flag ? 1 : -1;
-    if (cell.flag) Sound.flag(); else Sound.unflag();
-    renderCell(r, c);
-    updateMineCount();
+    toggleFlag(r, c);
   }
 
   function tryChord(r, c) {
@@ -830,10 +965,12 @@
     if (state.timerId) { clearInterval(state.timerId); state.timerId = null; }
   }
 
-  // 난이도에 따라 선택 가능한 늑구 수를 제한(초과 옵션 비활성화).
+  // 현재 타일 크기/뷰포트로 만들 수 있는 지뢰판 크기 기준으로
+  // 선택 가능한 늑구 수를 제한(초과 옵션 비활성화).
   function syncWolfOptions() {
-    const cfg = DIFFICULTIES[difficultyEl.value] || DIFFICULTIES.normal;
-    const maxW = cfg.maxWolves;
+    const cellSize = clampTileSize(tileSizeEl.value);
+    const { rows, cols } = computeBoardLayout(cellSize);
+    const maxW = maxWolvesFor(rows, cols);
     for (const opt of wolvesEl.options) {
       const v = parseInt(opt.value, 10);
       opt.disabled = v > maxW;
@@ -841,13 +978,20 @@
     if (parseInt(wolvesEl.value, 10) > maxW) wolvesEl.value = String(maxW);
   }
 
+  function updateTileSizeLabel() {
+    if (tileSizeValEl) tileSizeValEl.textContent = clampTileSize(tileSizeEl.value) + 'px';
+  }
+
   function newGame() {
     if (state) stopTimer();
     hideOverlay();
+    updateTileSizeLabel();
     syncWolfOptions();
     const numWolves = parseInt(wolvesEl.value, 10) || 1;
-    state = createState(difficultyEl.value, numWolves);
+    state = createState(difficultyEl.value, numWolves, tileSizeEl.value);
     render();
+    lastVW = window.innerWidth;
+    lastVH = window.innerHeight;
     Sound.start();
   }
 
@@ -856,12 +1000,67 @@
   overlayBtn.addEventListener('click', () => { Sound.warmup(); newGame(); });
   difficultyEl.addEventListener('change', newGame);
   wolvesEl.addEventListener('change', newGame);
+
+  // 슬라이더: 드래그 중에는 라벨만 실시간으로 갱신, 놓으면 새 게임 생성
+  tileSizeEl.addEventListener('input', updateTileSizeLabel);
+  tileSizeEl.addEventListener('change', newGame);
   muteBtn.addEventListener('click', () => {
     Sound.warmup();
     const muted = Sound.toggle();
     muteBtn.textContent = muted ? '🔈' : '🔊';
     muteBtn.title = muted ? '효과음 켜기' : '효과음 끄기';
   });
+
+  // 모바일 탭 모드 토글: 열기 ↔ 깃발
+  function updateModeBtn() {
+    if (!modeBtn) return;
+    if (flagMode) {
+      modeBtn.textContent = '🚩';
+      modeBtn.title = '깃발 모드 (탭하면 깃발 설치/해제)';
+      modeBtn.classList.add('flag-on');
+    } else {
+      modeBtn.textContent = '👆';
+      modeBtn.title = '열기 모드 (탭하면 칸 열기)';
+      modeBtn.classList.remove('flag-on');
+    }
+  }
+  if (modeBtn) {
+    modeBtn.addEventListener('click', () => {
+      flagMode = !flagMode;
+      updateModeBtn();
+    });
+    updateModeBtn();
+  }
+
+  // 모바일 햄버거 메뉴 토글
+  function setMenuOpen(open) {
+    if (!controlsMenu || !menuBtn) return;
+    controlsMenu.classList.toggle('open', open);
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    menuBtn.textContent = open ? '✖️' : '☰';
+    menuBtn.title = open ? '메뉴 닫기' : '메뉴 열기';
+  }
+  if (menuBtn && controlsMenu) {
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setMenuOpen(!controlsMenu.classList.contains('open'));
+    });
+    // 메뉴 바깥을 누르면 닫힘
+    document.addEventListener('click', (e) => {
+      if (!controlsMenu.classList.contains('open')) return;
+      if (controlsMenu.contains(e.target) || menuBtn.contains(e.target)) return;
+      setMenuOpen(false);
+    });
+    // ESC 로 닫힘
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && controlsMenu.classList.contains('open')) setMenuOpen(false);
+    });
+    // 메뉴 내 주요 액션을 누르면 자동으로 닫힘 (새 게임/랭킹/사용자명)
+    ['resetBtn', 'rankBtn', 'userBtn'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', () => setMenuOpen(false));
+    });
+  }
 
   // ============== 랭킹 (Google Apps Script 웹앱) ==============
   // backend/README.md 참고해서 배포한 뒤, 아래 URL을 채워주세요.

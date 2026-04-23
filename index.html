@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'" />
   <title>늑구를 구조해줘!</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -103,7 +104,7 @@
 
     <main class="board-wrap">
       <div class="board-scroll">
-        <div id="board" class="board" oncontextmenu="return false;"></div>
+        <div id="board" class="board"></div>
       </div>
       <div id="overlay" class="overlay hidden">
         <div class="overlay-content">

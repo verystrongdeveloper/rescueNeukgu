@@ -1067,23 +1067,53 @@
   const RANKING_API_URL = 'https://script.google.com/macros/s/AKfycbwl7KIfwVT2rd0_F76-LHYxAhV10dejPnx8Wqn9yuMSkjrF_FW5APx48qMGc5KHvAhXZQ/exec';
 
   const USER_KEY = 'rescueNeukgu.username';
+  const USERNAME_MAX_LEN = 20;
+  const USERNAME_CONTROL_RE = /[\u0000-\u001F\u007F]/g;
+  const USERNAME_FORMULA_RE = /^[=+\-@]/;
+  const RANKING_MAX_RESCUED_PER_SUBMIT = 5;
+  const RANKING_LIMIT_MAX = 50;
 
   const Ranking = (() => {
     const enabled = () => /^https?:\/\//.test(RANKING_API_URL);
+    const clampRankLimit = limit => Math.max(1, Math.min(RANKING_LIMIT_MAX, parseInt(limit, 10) || 20));
+
+    async function readJson(res) {
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch {
+        return { ok: false, error: '서버 응답을 해석하지 못했어요.' };
+      }
+    }
+
+    async function fetchChallenge(username) {
+      const url = `${RANKING_API_URL}?action=challenge&username=${encodeURIComponent(username)}`;
+      const res = await fetch(url, { cache: 'no-store', redirect: 'follow' });
+      return readJson(res);
+    }
 
     async function submit(rescuedCount) {
       const username = getUsername();
-      if (!enabled() || !username || !rescuedCount) return;
+      const safeCount = parseInt(rescuedCount, 10);
+      if (!enabled() || !username) return;
+      if (!Number.isFinite(safeCount) || safeCount < 1 || safeCount > RANKING_MAX_RESCUED_PER_SUBMIT) return;
       try {
         // Content-Type을 text/plain으로 보내 CORS preflight 회피 (GAS 웹앱 관행)
+        const challenge = await fetchChallenge(username);
+        if (!challenge || !challenge.ok || !challenge.token) {
+          console.warn('[rank] challenge failed:', challenge && challenge.error ? challenge.error : 'unknown');
+          return;
+        }
         const res = await fetch(RANKING_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ username, rescuedCount }),
+          body: JSON.stringify({ username, rescuedCount: safeCount, token: challenge.token }),
           redirect: 'follow',
         });
-        const text = await res.text();
-        console.log('[rank] submit response:', res.status, text);
+        const payload = await readJson(res);
+        if (!payload || !payload.ok) {
+          console.warn('[rank] submit rejected:', payload && payload.error ? payload.error : 'unknown');
+        }
       } catch (e) {
         console.warn('[rank] submit failed:', e);
       }
@@ -1092,15 +1122,9 @@
     async function fetchRank(limit = 20) {
       if (!enabled()) return { ok: false, error: 'disabled' };
       try {
-        const url = `${RANKING_API_URL}?action=rank&limit=${limit}`;
+        const url = `${RANKING_API_URL}?action=rank&limit=${clampRankLimit(limit)}`;
         const res = await fetch(url, { redirect: 'follow' });
-        const text = await res.text();
-        console.log('[rank] fetch status:', res.status, 'body preview:', text.slice(0, 200));
-        try {
-          return JSON.parse(text);
-        } catch (parseErr) {
-          return { ok: false, error: `응답이 JSON이 아님 (status ${res.status}). 본문 앞부분: ${text.slice(0, 120)}` };
-        }
+        return readJson(res);
       } catch (e) {
         console.warn('[rank] fetch failed:', e);
         return { ok: false, error: String(e && e.message || e) };
@@ -1111,11 +1135,39 @@
   })();
 
   // ============== 사용자명 관리 ==============
+  function normalizeUsername(value) {
+    return String(value || '')
+      .replace(USERNAME_CONTROL_RE, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, USERNAME_MAX_LEN);
+  }
+
+  function getUsernameValidationError(name) {
+    if (!name) return '이름을 입력해 주세요.';
+    if (USERNAME_FORMULA_RE.test(name)) return '이름은 =, +, -, @ 로 시작할 수 없어요.';
+    return '';
+  }
+
+  function setUserInputError(message = '') {
+    userInput.setCustomValidity(message);
+  }
+
   function getUsername() {
-    try { return (localStorage.getItem(USER_KEY) || '').trim(); } catch { return ''; }
+    try {
+      const clean = normalizeUsername(localStorage.getItem(USER_KEY));
+      if (getUsernameValidationError(clean)) {
+        localStorage.removeItem(USER_KEY);
+        return '';
+      }
+      return clean;
+    } catch {
+      return '';
+    }
   }
   function setUsername(name) {
-    const clean = String(name || '').trim().slice(0, 20);
+    const clean = normalizeUsername(name);
+    if (getUsernameValidationError(clean)) return '';
     try { localStorage.setItem(USER_KEY, clean); } catch {}
     refreshUserBtn();
     return clean;
@@ -1127,13 +1179,23 @@
 
   function openUserModal() {
     userInput.value = getUsername();
+    setUserInputError('');
     userModal.classList.remove('hidden');
     setTimeout(() => userInput.focus(), 0);
   }
   function closeUserModal() { userModal.classList.add('hidden'); }
 
   function saveUserFromInput() {
-    const name = setUsername(userInput.value);
+    const normalized = normalizeUsername(userInput.value);
+    const error = getUsernameValidationError(normalized);
+    userInput.value = normalized;
+    if (error) {
+      setUserInputError(error);
+      userInput.reportValidity();
+      userInput.focus();
+      return;
+    }
+    const name = setUsername(normalized);
     if (!name) { userInput.focus(); return; }
     closeUserModal();
   }
@@ -1188,8 +1250,10 @@
   }
 
   // ============== 이벤트 바인딩: 랭킹/사용자 ==============
+  boardEl.addEventListener('contextmenu', (e) => e.preventDefault());
   userBtn.addEventListener('click', openUserModal);
   userSaveBtn.addEventListener('click', saveUserFromInput);
+  userInput.addEventListener('input', () => setUserInputError(''));
   userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') saveUserFromInput();
     if (e.key === 'Escape') closeUserModal();

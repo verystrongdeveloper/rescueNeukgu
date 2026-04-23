@@ -809,6 +809,14 @@ html, body {
 @media (max-width: 640px) {
   .mobile-only { display: inline-flex !important; }
 
+  /* Small touch devices can still report stylus hover. Neutralize tile hover here. */
+  .cell:hover:not(.open):not(.mine-boom) {
+    filter: none;
+    box-shadow:
+      inset -1px -1px 0 rgba(0, 0, 0, 0.32),
+      inset 1px 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
   /* 페이지 전체 스크롤 완전 차단 (당겨서 새로고침/고무줄 효과 포함) */
   html, body {
     height: 100vh;

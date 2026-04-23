@@ -1,0 +1,21 @@
+{
+  "name": "늑구를 구조해줘!",
+  "short_name": "늑구 구조",
+  "description": "지뢰밭을 피해 안전한 길을 만들고 늑구를 구조하는 퍼즐 게임",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#b7e3ff",
+  "theme_color": "#7cba6b",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
